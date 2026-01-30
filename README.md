@@ -1,8 +1,11 @@
 # Snake Race — ARSW Lab #2 (Java 21, Virtual Threads)
 
 **Escuela Colombiana de Ingeniería – Arquitecturas de Software**  
-Laboratorio de programación concurrente: condiciones de carrera, sincronización y colecciones seguras.
+Laboratorio de programación concurrente: condiciones de carrera, sincronización y colecciones seguras.  
 
+**Integrantes**  
+- Laura Alejandra Venegas Piraban
+- Sergio Alejandro Idarraga Torres  
 ---
 
 ## Requisitos
@@ -54,7 +57,9 @@ co.eci.snake
 
 # Actividades del laboratorio
 
-## Parte I — (Calentamiento) `wait/notify` en un programa multi-hilo
+## Parte I — (Calentamiento) `wait/notify` en un programa multi-hilo  
+
+**NOTA**: El repositorio donde se trabaja PrimeFinder es: https://github.com/LauraVenegas6/wait-notify-excercise.git.
 
 1. Toma el programa [**PrimeFinder**](https://github.com/ARSW-ECI/wait-notify-excercise).
 2. Modifícalo para que **cada _t_ milisegundos**:
