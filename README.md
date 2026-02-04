@@ -69,7 +69,24 @@ co.eci.snake
 3. La sincronización debe usar **`synchronized`**, **`wait()`**, **`notify()` / `notifyAll()`** sobre el **mismo monitor** (sin _busy-waiting_).
 4. Entrega en el reporte de laboratorio **las observaciones y/o comentarios** explicando tu diseño de sincronización (qué lock, qué condición, cómo evitas _lost wakeups_).
 
-> Objetivo didáctico: practicar suspensión/continuación **sin** espera activa y consolidar el modelo de monitores en Java.
+> Objetivo didáctico: practicar suspensión/continuación **sin** espera activa y consolidar el modelo de monitores en Java.  
+
+**Observaciones y cometarios**  
+Lo que hicimos fue que la sincronización se basara en un solo monitor compartido (lock), que funciona como punto de encuentro entre el hilo Control y los hilos trabajadores. Este lock es un Object declarado como private final dentro de la clase Control, lo que asegura que todos los hilos usen exactamente el mismo monitor y que no cambie durante la ejecución.  
+El diseño usa dos elementos clave para coordinar la pausa:  
+- paused: un booleano que indica si los hilos deben detenerse.  
+- pausedThreads: un contador que permite saber cuántos hilos ya entraron en pausa funcionando como una barrera de sincronización.  
+
+El funcionamiento es el siguiente: cada cierto tiempo (TMILISECONDS), el hilo Control entra en un bloque sincronizado, activa la pausa poniendo paused = true y reinicia pausedThreads = 0. Luego espera dentro de otro bloque sincronizado con while (pausedThreads < NTHREADS) lock.wait(), quedando bloqueado hasta que todos los hilos trabajadores hayan confirmado que están en pausa.
+
+Por su parte, cada PrimeFinderThread revisa en cada iteración si debe pausarse. Cuando detecta que paused es verdadero, entra al lock y reporta la pausa una sola vez usando una bandera local (reportedPause). Esto incrementa el contador mediante incrementPausedThreads() y se hace un notifyAll() para despertar al hilo Control si corresponde.
+
+Cuando pausedThreads alcanza el número total de hilos, el Control sale del wait() y puede contar los primos de forma segura, sabiendo que ningún hilo está modificando la información. Para reanudar la ejecución, el Control vuelve a sincronizar, pone paused = false, reinicia el contador y llama a notifyAll(), despertando a todos los trabajadores, que limpian su estado local y continúan buscando primos.
+
+Para evitar problemas de lost wakeups, todos los wait() están protegidos con bucles while, tanto en el Control como en los hilos trabajadores, asegurando que las condiciones se verifiquen siempre antes de continuar. Además, se usa notifyAll() en lugar de notify() para garantizar que ningún hilo quede bloqueado por error.
+
+Finalmente, no hay busy-waiting pues los hilos se suspenden con wait() en lugar de usar ciclos con sleep(), lo que hace el sistema más eficiente.
+
 
 ---
 
