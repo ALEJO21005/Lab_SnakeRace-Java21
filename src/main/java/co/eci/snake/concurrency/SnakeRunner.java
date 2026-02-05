@@ -12,16 +12,21 @@ public final class SnakeRunner implements Runnable {
   private final int baseSleepMs = 80;
   private final int turboSleepMs = 40;
   private int turboTicks = 0;
+  private final PauseController pauseController;
 
-  public SnakeRunner(Snake snake, Board board) {
+  public SnakeRunner(Snake snake, Board board, PauseController pauseController) {
     this.snake = snake;
     this.board = board;
+    this.pauseController = pauseController;
   }
 
   @Override
   public void run() {
     try {
       while (!Thread.currentThread().isInterrupted()) {
+        // Pausa de los hilos sincronizado
+        pauseController.checkPause();
+        
         maybeTurn();
         var res = board.step(snake);
         if (res == Board.MoveResult.HIT_OBSTACLE) {
@@ -29,6 +34,7 @@ public final class SnakeRunner implements Runnable {
         } else if (res == Board.MoveResult.ATE_TURBO) {
           turboTicks = 100;
         }
+        
         int sleep = (turboTicks > 0) ? turboSleepMs : baseSleepMs;
         if (turboTicks > 0) turboTicks--;
         Thread.sleep(sleep);

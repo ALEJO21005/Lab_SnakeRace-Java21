@@ -1,5 +1,6 @@
 package co.eci.snake.ui.legacy;
 
+import co.eci.snake.concurrency.PauseController;
 import co.eci.snake.concurrency.SnakeRunner;
 import co.eci.snake.core.Board;
 import co.eci.snake.core.Direction;
@@ -10,6 +11,7 @@ import co.eci.snake.core.engine.GameClock;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -21,12 +23,18 @@ public final class SnakeApp extends JFrame {
   private final JButton actionButton;
   private final GameClock clock;
   private final java.util.List<Snake> snakes = new java.util.ArrayList<>();
+  private final PauseController pauseController;
+  private final java.util.Map<Integer, Integer> maxLengths = new java.util.concurrent.ConcurrentHashMap<>();
+  private final java.util.Map<Integer, Long> deathTimes = new java.util.concurrent.ConcurrentHashMap<>();
+  private final java.util.Set<Integer> deadSnakes = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
   public SnakeApp() {
     super("The Snake Race");
     this.board = new Board(35, 28);
 
     int N = Integer.getInteger("snakes", 2);
+    this.pauseController = new PauseController(N);
+    
     for (int i = 0; i < N; i++) {
       int x = 2 + (i * 3) % board.width();
       int y = 2 + (i * 2) % board.height();
@@ -34,7 +42,7 @@ public final class SnakeApp extends JFrame {
       snakes.add(Snake.of(x, y, dir));
     }
 
-    this.gamePanel = new GamePanel(board, () -> snakes);
+    this.gamePanel = new GamePanel(board, () -> snakes, () -> this.getStatsMessage());
     this.actionButton = new JButton("Action");
 
     setLayout(new BorderLayout());
@@ -48,7 +56,39 @@ public final class SnakeApp extends JFrame {
     this.clock = new GameClock(60, () -> SwingUtilities.invokeLater(gamePanel::repaint));
 
     var exec = Executors.newVirtualThreadPerTaskExecutor();
-    snakes.forEach(s -> exec.submit(new SnakeRunner(s, board)));
+    for (int i = 0; i < snakes.size(); i++) {
+      final int snakeId = i;
+      final Snake snake = snakes.get(i);
+      exec.submit(() -> {
+        try {
+          int collisionCount = 0;
+          while (!Thread.currentThread().isInterrupted()) {
+            pauseController.checkPause();
+            
+            // Actualizar longitud máxima
+            int currentLength = snake.snapshot().size();
+            maxLengths.merge(snakeId, currentLength, Math::max);
+            
+            var res = board.step(snake);
+            if (res == Board.MoveResult.HIT_OBSTACLE) {
+              collisionCount++;
+              if (collisionCount >= 3) {
+                deadSnakes.add(snakeId);
+                deathTimes.put(snakeId, System.currentTimeMillis());
+                break;
+              }
+              snake.turn(Direction.values()[(int)(Math.random() * 4)]);
+            } else {
+              collisionCount = 0;
+            }
+            
+            Thread.sleep(80);
+          }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      });
+    }
 
     actionButton.addActionListener((ActionEvent e) -> togglePause());
 
@@ -125,22 +165,102 @@ public final class SnakeApp extends JFrame {
     }
 
     setVisible(true);
-    clock.start();
   }
 
   private void togglePause() {
-    if ("Action".equals(actionButton.getText())) {
-      actionButton.setText("Resume");
-      clock.pause();
-    } else {
-      actionButton.setText("Action");
+    String currentText = actionButton.getText();
+    
+    if ("Action".equals(currentText)) {
+      actionButton.setText("Pausar");
+      clock.start();
+      pauseController.resume();
+      
+    } else if ("Pausar".equals(currentText)) {
+      actionButton.setText("Pausando...");
+      actionButton.setEnabled(false);
+      
+      new Thread(() -> {
+        clock.pause();
+        boolean success = pauseController.requestPause();
+        
+        SwingUtilities.invokeLater(() -> {
+          if (success) {
+            actionButton.setText("Reanudar");
+            actionButton.setEnabled(true);
+            gamePanel.repaint();
+          } else {
+            // Si falla, forzar pausa de todos modos
+            actionButton.setText("Reanudar");
+            actionButton.setEnabled(true);
+            gamePanel.repaint();
+          }
+        });
+      }).start();
+      
+    } else if ("Reanudar".equals(currentText) || currentText.startsWith("Error")) {
+      actionButton.setText("Pausar");
+      pauseController.resume();
       clock.resume();
     }
+  }
+
+  private String getStatsMessage() {
+    if (!pauseController.isPaused()) {
+      return null;
+    }
+    Snake longest = null;
+    int maxLength = 0;
+    int longestIndex = -1;
+    
+    for (int i = 0; i < snakes.size(); i++) {
+      if (!deadSnakes.contains(i)) {
+        int length = snakes.get(i).snapshot().size();
+        if (length > maxLength) {
+          maxLength = length;
+          longest = snakes.get(i);
+          longestIndex = i;
+        }
+      }
+    }
+
+    Integer firstDead = null;
+    long earliestDeath = Long.MAX_VALUE;
+    
+    for (Integer snakeId : deadSnakes) {
+      Long deathTime = deathTimes.get(snakeId);
+      if (deathTime != null && deathTime < earliestDeath) {
+        earliestDeath = deathTime;
+        firstDead = snakeId;
+      }
+    }
+
+    StringBuilder msg = new StringBuilder("=== JUEGO PAUSADO ===\n\n");
+
+    if (longest != null) {
+      msg.append(String.format("Serpiente mas larga viva: #%d (Longitud: %d)\n",
+          longestIndex + 1, maxLength));
+    } else {
+      msg.append("No hay serpientes vivas\n");
+    }
+
+    if (firstDead != null) {
+      Integer maxLen = maxLengths.get(firstDead);
+      msg.append(String.format("\nPrimera en morir: Serpiente #%d (Longitud max: %d)\n",
+          firstDead + 1, maxLen != null ? maxLen : 0));
+    } else {
+      msg.append("\nNinguna serpiente ha muerto\n");
+    }
+
+    long aliveCount = snakes.size() - deadSnakes.size();
+    msg.append(String.format("\nVivas: %d | Muertas: %d", aliveCount, deadSnakes.size()));
+
+    return msg.toString();
   }
 
   public static final class GamePanel extends JPanel {
     private final Board board;
     private final Supplier snakesSupplier;
+    private final StatsSupplier statsSupplier;
     private final int cell = 20;
 
     @FunctionalInterface
@@ -148,9 +268,15 @@ public final class SnakeApp extends JFrame {
       List<Snake> get();
     }
 
-    public GamePanel(Board board, Supplier snakesSupplier) {
+    @FunctionalInterface
+    public interface StatsSupplier {
+      String get();
+    }
+
+    public GamePanel(Board board, Supplier snakesSupplier, StatsSupplier statsSupplier) {
       this.board = board;
       this.snakesSupplier = snakesSupplier;
+      this.statsSupplier = statsSupplier;
       setPreferredSize(new Dimension(board.width() * cell + 1, board.height() * cell + 40));
       setBackground(Color.WHITE);
     }
@@ -226,6 +352,32 @@ public final class SnakeApp extends JFrame {
         }
         idx++;
       }
+
+      String statsMessage = statsSupplier.get();
+      if (statsMessage != null) {
+        g2.setColor(new Color(0, 0, 0, 180));
+        int boxWidth = 400;
+        int boxHeight = 200;
+        int boxX = (getWidth() - boxWidth) / 2;
+        int boxY = (getHeight() - boxHeight) / 2;
+        g2.fillRoundRect(boxX, boxY, boxWidth, boxHeight, 20, 20);
+
+        g2.setColor(new Color(255, 215, 0));
+        g2.setStroke(new BasicStroke(3));
+        g2.drawRoundRect(boxX, boxY, boxWidth, boxHeight, 20, 20);
+
+        g2.setColor(Color.WHITE);
+        g2.setFont(new Font("Monospaced", Font.BOLD, 14));
+        
+        int textY = boxY + 35;
+        for (String line : statsMessage.split("\n")) {
+          FontMetrics fm = g2.getFontMetrics();
+          int textX = boxX + (boxWidth - fm.stringWidth(line)) / 2;
+          g2.drawString(line, textX, textY);
+          textY += 22;
+        }
+      }
+
       g2.dispose();
     }
   }
