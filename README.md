@@ -263,3 +263,37 @@ Reanudar nos vuelve donde dejamos el juego en pausa.
 </div>
 
 Y así se ve cuando muere una serpiente.
+
+### 4) Robustez bajo carga 
+
+Se realizaron pruebas incrementando progresivamente la cantidad de serpientes en ejecución mediante el parámetro de sistema -Dsnakes=N, el cual es leído en la clase Main para configurar dinámicamente la simulación.
+Las pruebas se ejecutaron con 20, 30, 50 y 100 serpientes, representando escenarios de carga básica, media, alta y extrema respectivamente. 
+
+Durante todas las pruebas se verificó que no aparecieran excepciones asociadas a problemas de concurrencia, tales como:
+•	ConcurrentModificationException
+•	NullPointerException inesperados
+•	IllegalStateException
+•	Bloqueos totales del sistema (deadlocks)
+•	Errores relacionados con hilos en la consola
+No se observaron estos errores, lo que indica que las estructuras compartidas se encuentran adecuadamente protegidas y que las operaciones críticas se ejecutan de manera segura en entornos concurrentes.
+
+Como podemos ver en la siguiente imagen, se creal el tablero correctamente con 20 serpientes. 
+
+<div align="center">
+  <img src="img/punto 4-1.png" alt="Punto 4-1">
+</div>
+
+Las pruebas demostraron que el sistema se comporta de manera estable incluso con una cantidad elevada de serpientes en ejecución. No se detectaron fallos de concurrencia, inconsistencias de datos ni bloqueos permanentes.
+
+La pausa y reanudación del juego funcionaron correctamente incluso bajo alta carga, y las funcionalidades adicionales como turbo y teletransportes mantuvieron su comportamiento esperado sin introducir errores de sincronización.
+
+### Guía de ejecución de casos de prueba - Configuración desde Main 
+
+En el archivo **src/main/java/co/eci/snake/app/Main.java** se encuentra una sección **CONFIGURACIONES DE PRUEBA**, donde hay varias opciones predefinidas para ejecutar el juego con distinta carga de concurrencia. 
+
+En la siguiente imagen puedes ver como esta el archivo **Main** para que puedas descomentar el caso de prueba a usar. 
+
+
+<div align="center">
+  <img src="img/casos-prueba.png" alt="casos-prueba">
+</div>
