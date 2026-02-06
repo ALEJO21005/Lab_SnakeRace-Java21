@@ -162,6 +162,7 @@ Este laboratorio es una adaptación modernizada del ejercicio **SnakeRace** de A
 ## Parte I — (Calentamiento) `wait/notify` en un programa multi-hilo  
 
 **NOTA**: El repositorio donde se trabaja PrimeFinder es: https://github.com/LauraVenegas6/wait-notify-excercise.git.  
+**NOTA**: Tambien el ejercicio parte I se encuentra en un .zip.
 
 **Observaciones y cometarios**  
 Lo que hicimos fue que la sincronización se basara en un solo monitor compartido (lock), que funciona como punto de encuentro entre el hilo Control y los hilos trabajadores. Este lock es un Object declarado como private final dentro de la clase Control, lo que asegura que todos los hilos usen exactamente el mismo monitor y que no cambie durante la ejecución.  
