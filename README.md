@@ -71,21 +71,7 @@ co.eci.snake
 
 > Objetivo didáctico: practicar suspensión/continuación **sin** espera activa y consolidar el modelo de monitores en Java.  
 
-**Observaciones y cometarios**  
-Lo que hicimos fue que la sincronización se basara en un solo monitor compartido (lock), que funciona como punto de encuentro entre el hilo Control y los hilos trabajadores. Este lock es un Object declarado como private final dentro de la clase Control, lo que asegura que todos los hilos usen exactamente el mismo monitor y que no cambie durante la ejecución.  
-El diseño usa dos elementos clave para coordinar la pausa:  
-- paused: un booleano que indica si los hilos deben detenerse.  
-- pausedThreads: un contador que permite saber cuántos hilos ya entraron en pausa funcionando como una barrera de sincronización.  
 
-El funcionamiento es el siguiente: cada cierto tiempo (TMILISECONDS), el hilo Control entra en un bloque sincronizado, activa la pausa poniendo paused = true y reinicia pausedThreads = 0. Luego espera dentro de otro bloque sincronizado con while (pausedThreads < NTHREADS) lock.wait(), quedando bloqueado hasta que todos los hilos trabajadores hayan confirmado que están en pausa.
-
-Por su parte, cada PrimeFinderThread revisa en cada iteración si debe pausarse. Cuando detecta que paused es verdadero, entra al lock y reporta la pausa una sola vez usando una bandera local (reportedPause). Esto incrementa el contador mediante incrementPausedThreads() y se hace un notifyAll() para despertar al hilo Control si corresponde.
-
-Cuando pausedThreads alcanza el número total de hilos, el Control sale del wait() y puede contar los primos de forma segura, sabiendo que ningún hilo está modificando la información. Para reanudar la ejecución, el Control vuelve a sincronizar, pone paused = false, reinicia el contador y llama a notifyAll(), despertando a todos los trabajadores, que limpian su estado local y continúan buscando primos.
-
-Para evitar problemas de lost wakeups, todos los wait() están protegidos con bucles while, tanto en el Control como en los hilos trabajadores, asegurando que las condiciones se verifiquen siempre antes de continuar. Además, se usa notifyAll() en lugar de notify() para garantizar que ningún hilo quede bloqueado por error.
-
-Finalmente, no hay busy-waiting pues los hilos se suspenden con wait() en lugar de usar ciclos con sleep(), lo que hace el sistema más eficiente.
 
 
 ---
@@ -170,3 +156,42 @@ Incluye compilación y ejecución de pruebas JUnit. Si tienes análisis estátic
 Este laboratorio es una adaptación modernizada del ejercicio **SnakeRace** de ARSW. El enunciado de actividades se conserva para mantener los objetivos pedagógicos del curso.
 
 **Base construida por el Ing. Javier Toquica.**
+
+# REPORTE DE LABORATORIO
+
+## Parte I — (Calentamiento) `wait/notify` en un programa multi-hilo  
+
+**NOTA**: El repositorio donde se trabaja PrimeFinder es: https://github.com/LauraVenegas6/wait-notify-excercise.git.  
+
+**Observaciones y cometarios**  
+Lo que hicimos fue que la sincronización se basara en un solo monitor compartido (lock), que funciona como punto de encuentro entre el hilo Control y los hilos trabajadores. Este lock es un Object declarado como private final dentro de la clase Control, lo que asegura que todos los hilos usen exactamente el mismo monitor y que no cambie durante la ejecución.  
+El diseño usa dos elementos clave para coordinar la pausa:  
+- paused: un booleano que indica si los hilos deben detenerse.  
+- pausedThreads: un contador que permite saber cuántos hilos ya entraron en pausa funcionando como una barrera de sincronización.  
+
+El funcionamiento es el siguiente: cada cierto tiempo (TMILISECONDS), el hilo Control entra en un bloque sincronizado, activa la pausa poniendo paused = true y reinicia pausedThreads = 0. Luego espera dentro de otro bloque sincronizado con while (pausedThreads < NTHREADS) lock.wait(), quedando bloqueado hasta que todos los hilos trabajadores hayan confirmado que están en pausa.
+
+Por su parte, cada PrimeFinderThread revisa en cada iteración si debe pausarse. Cuando detecta que paused es verdadero, entra al lock y reporta la pausa una sola vez usando una bandera local (reportedPause). Esto incrementa el contador mediante incrementPausedThreads() y se hace un notifyAll() para despertar al hilo Control si corresponde.
+
+Cuando pausedThreads alcanza el número total de hilos, el Control sale del wait() y puede contar los primos de forma segura, sabiendo que ningún hilo está modificando la información. Para reanudar la ejecución, el Control vuelve a sincronizar, pone paused = false, reinicia el contador y llama a notifyAll(), despertando a todos los trabajadores, que limpian su estado local y continúan buscando primos.
+
+Para evitar problemas de lost wakeups, todos los wait() están protegidos con bucles while, tanto en el Control como en los hilos trabajadores, asegurando que las condiciones se verifiquen siempre antes de continuar. Además, se usa notifyAll() en lugar de notify() para garantizar que ningún hilo quede bloqueado por error.
+
+Finalmente, no hay busy-waiting pues los hilos se suspenden con wait() en lugar de usar ciclos con sleep(), lo que hace el sistema más eficiente.
+
+## Parte II — SnakeRace concurrente (núcleo del laboratorio)
+
+### 1) Análisis de concurrencia  
+
+- Explica **cómo** el código usa hilos para dar autonomía a cada serpiente.
+- **Identifica** y documenta en **`el reporte de laboratorio`**:
+  - Posibles **condiciones de carrera**.  
+  Desde la clase SnakeRunner la cual implementa la interfaz Runnable como podemos ver en el siguiente fragmento de código, el método sobrescrito run() es el que contiene el ciclo principal donde se orquesta el movimiento independiente de cada serpiente, ahí se decide la dirección (que por cierto es de forma aleatoria), se realiza el movimiento en el tablero y además se controla la velocidad del movimiento se regula mediante pausas controladas con Thread.sleep(), eso hace que el ritmo de ejecución sea independiente.
+
+  Cada hilo controla a una serpiente en específico, pues no existe un “controlador” que gestione de manera global el movimiento de todas ellas. En su lugar, cada serpiente ejecuta un ciclo while en el que se encuentra toda la lógica de su movimiento, funcionando en paralelo.
+  <div align="center">
+  <img src="img/inicio.png" alt="Inicio del juego">
+</div>
+    - **Colecciones** o estructuras **no seguras** en contexto concurrente.
+  - Ocurrencias de **espera activa** (busy-wait) o de sincronización innecesaria.
+
