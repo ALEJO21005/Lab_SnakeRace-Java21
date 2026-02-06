@@ -183,15 +183,42 @@ Finalmente, no hay busy-waiting pues los hilos se suspenden con wait() en lugar 
 
 ### 1) Análisis de concurrencia  
 
-- Explica **cómo** el código usa hilos para dar autonomía a cada serpiente.
-- **Identifica** y documenta en **`el reporte de laboratorio`**:
-  - Posibles **condiciones de carrera**.  
-  Desde la clase SnakeRunner la cual implementa la interfaz Runnable como podemos ver en el siguiente fragmento de código, el método sobrescrito run() es el que contiene el ciclo principal donde se orquesta el movimiento independiente de cada serpiente, ahí se decide la dirección (que por cierto es de forma aleatoria), se realiza el movimiento en el tablero y además se controla la velocidad del movimiento se regula mediante pausas controladas con Thread.sleep(), eso hace que el ritmo de ejecución sea independiente.
+- Explica **cómo** el código usa hilos para dar autonomía a cada serpiente.   
+    Desde la clase SnakeRunner la cual implementa la interfaz Runnable como podemos ver en el siguiente fragmento de código, el método sobrescrito run() es el que contiene el ciclo principal donde se orquesta el movimiento independiente de cada serpiente, ahí se decide la dirección (que por cierto es de forma aleatoria), se realiza el movimiento en el tablero y además se controla la velocidad del movimiento se regula mediante pausas controladas con Thread.sleep(), eso hace que el ritmo de ejecución sea independiente.
 
-  Cada hilo controla a una serpiente en específico, pues no existe un “controlador” que gestione de manera global el movimiento de todas ellas. En su lugar, cada serpiente ejecuta un ciclo while en el que se encuentra toda la lógica de su movimiento, funcionando en paralelo.
+    Cada hilo controla a una serpiente en específico, pues no existe un “controlador” que gestione de manera global el movimiento de todas ellas. En su lugar, cada serpiente ejecuta un ciclo while en el que se encuentra toda la lógica de su movimiento, funcionando en paralelo.
   <div align="center">
   <img src="img/inicio.png" alt="Inicio del juego">
 </div>
-    - **Colecciones** o estructuras **no seguras** en contexto concurrente.
-  - Ocurrencias de **espera activa** (busy-wait) o de sincronización innecesaria.
 
+  - Posibles **condiciones de carrera**.  
+    analizamos qué atributos o métodos en común requerían las serpientes para moverse o cambiar de tamaño. En la clase Snake, encontramos que el atributo ArrayDeque<> gestionaba el tamaño de la serpiente; sin embargo, este tipo de dato no era seguro para el acceso concurrente. Los métodos, como advance(), no estaban sincronizados, lo que implicaba que otros hilos podían consultar el estado de la serpiente mientras se producía una modificación. Cuando la lectura ocurría de manera simultánea con una actualización entre dos o más hilos, se generaban estados inconsistentes en el cuerpo de la serpiente. Como ya lo habíamos visto, esta situación constituía una condición de carrera, pues múltiples hilos accedían a la misma estructura mutable sin un mecanismo de MUTEX.
+    También evidenciamos otra condición de carrera en la clase Board, la cual era un recurso compartido por todas las serpientes. Aunque existían mecanismos de sincronización —por ejemplo, métodos como step() que modificaban las colecciones internas y se declaraban sincronizados—, estos evitaban que dos hilos accedieran simultáneamente a la misma variable. No obstante, el problema radicaba en que una cantidad N de hilos competía por la misma variable, lo que ocasionaba una alta contención de bloqueo.  
+
+    Asimismo, identificamos una condición de carrera de tipo check-then-act en el método turn() de la clase Snake. Aunque la variable direction estaba declarada como volatile, lo que garantizaba la visibilidad de los cambios entre hilos, la secuencia completa de validar si el giro era permitido y luego asignar la nueva dirección no se ejecutaba de forma atómica. El método primero verificaba que la nueva dirección no fuera opuesta a la actual (para evitar giros de 180°) y, si la condición se cumplía, procedía a asignar el nuevo valor. Sin embargo, cuando dos hilos ejecutaban este método simultáneamente —por ejemplo, el hilo automático de movimiento de la serpiente y el hilo encargado de procesar entradas del usuario— ambos podían evaluar la condición basándose en un estado antiguo de direction. Entre la validación y la asignación, otro hilo podía modificar la dirección, provocando que se estableciera un valor que violaba la restricción lógica del giro.  
+
+    - **Colecciones** o estructuras **no seguras** en contexto concurrente.  
+    Colecciones que no son seguras por su naturaleza como estructura de datos son: 
+    -	ArrayDeque la cual se usa para manejar el tamaño del cuerpo de la serpiente.
+    -	HashSet para ubicar los ratones, los obstáculos y el turbo de cada serpiente. 
+    -	HashMap para usar los teletransportes. 
+    •	Ocurrencias de espera activa (busy-wait) o de sincronización innecesaria. 
+    
+  - Ocurrencias de **espera activa** (busy-wait) o de sincronización innecesaria.  
+    No logramos identificar patrones de busy-wait. Los hilos de las serpientes utilizan Thread.sleep() para pausar su ejecución entre movimientos, lo que permite liberar la CPU y evita consumo innecesario de recursos.     
+
+### 2) Correcciones mínimas y regiones críticas
+
+- **Elimina** esperas activas reemplazándolas por **señales** / **estados** o mecanismos de la librería de concurrencia.
+- Protege **solo** las **regiones críticas estrictamente necesarias** (evita bloqueos amplios).
+
+Como no existe por ahora esperas activas en el código no es necesario hacer alguna modificación para cubrir este caso. 
+
+Se identificó que el atributo body de la clase Snake utiliza un ArrayDeque, estructura que no es segura para acceso concurrente. Múltiples hilos podían leer y modificar el cuerpo de la serpiente simultáneamente, generando estados inconsistentes.
+Para solucionar este problema, se aplicó sincronización a todos los métodos que acceden a dicha estructura:
+- head() ahora es synchronized
+Garantiza que la lectura de la cabeza de la serpiente no ocurra mientras otro hilo está modificando el cuerpo.
+- snapshot() ahora es synchronized
+Evita lecturas inconsistentes o posibles excepciones cuando otros hilos (por ejemplo, la interfaz gráfica) obtienen una copia del cuerpo mientras este está siendo modificado.
+- advance() ahora es synchronized
+Protege las operaciones de modificación sobre el cuerpo (addFirst, removeLast), evitando corrupción de datos si dos hilos intentan modificar la estructura al mismo tiempo.
