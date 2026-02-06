@@ -221,4 +221,45 @@ Garantiza que la lectura de la cabeza de la serpiente no ocurra mientras otro hi
 - snapshot() ahora es synchronized
 Evita lecturas inconsistentes o posibles excepciones cuando otros hilos (por ejemplo, la interfaz gráfica) obtienen una copia del cuerpo mientras este está siendo modificado.
 - advance() ahora es synchronized
-Protege las operaciones de modificación sobre el cuerpo (addFirst, removeLast), evitando corrupción de datos si dos hilos intentan modificar la estructura al mismo tiempo.
+Protege las operaciones de modificación sobre el cuerpo (addFirst, removeLast), evitando corrupción de datos si dos hilos intentan modificar la estructura al mismo tiempo.  
+
+### 3) Control de ejecución seguro (UI)
+
+- Implementa la **UI** con **Iniciar / Pausar / Reanudar** (ya existe el botón _Action_ y el reloj `GameClock`).
+superado  
+- Al **Pausar**, muestra de forma **consistente** (sin _tearing_):
+  - La **serpiente viva más larga**.
+  - La **peor serpiente** (la que **primero murió**).  
+  superado  
+- Considera que la suspensión **no es instantánea**; coordina para que el estado mostrado no quede “a medias”.  
+superado  
+**evidencia**
+<div align="center">
+  <img src="img/punto3-1.png" alt="Punto 3-1">
+</div>
+
+El botón action actúa como empezar el juego, cuando le damos en el botón, este empieza.
+
+<div align="center">
+  <img src="img/punto3-2.png" alt="Punto 3-2">
+</div>
+
+Inicia el juego y de forma inmediata se cambia el botón action a pausar para detener el juego.
+
+<div align="center">
+  <img src="img/punto3-3.png" alt="Punto 3-3">
+</div>
+
+Cuando le damos en pausar se detiene el juego y nos aparece unas pequeñas estadísticas de como va, como la serpiente más larga, cuantas siguen vivas y cual es la serpiente que murió de primeras y las serpientes mueren después de colisionar 3 veces con algún obstáculo.
+
+<div align="center">
+  <img src="img/punto3-4.png" alt="Punto 3-4">
+</div>
+
+Reanudar nos vuelve donde dejamos el juego en pausa.
+
+<div align="center">
+  <img src="img/punto3-5.png" alt="Punto 3-5">
+</div>
+
+Y así se ve cuando muere una serpiente.
