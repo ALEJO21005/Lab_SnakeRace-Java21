@@ -28,11 +28,11 @@ public final class SnakeApp extends JFrame {
   private final java.util.Map<Integer, Long> deathTimes = new java.util.concurrent.ConcurrentHashMap<>();
   private final java.util.Set<Integer> deadSnakes = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-  public SnakeApp() {
+  public SnakeApp(int numSnakes) {
     super("The Snake Race");
     this.board = new Board(35, 28);
 
-    int N = Integer.getInteger("snakes", 2);
+    int N = numSnakes;
     this.pauseController = new PauseController(N);
     
     for (int i = 0; i < N; i++) {
@@ -62,6 +62,10 @@ public final class SnakeApp extends JFrame {
       exec.submit(() -> {
         try {
           int collisionCount = 0;
+          int turboTicks = 0;
+          final int baseSleep = 80;
+          final int turboSleep = 40;
+          
           while (!Thread.currentThread().isInterrupted()) {
             pauseController.checkPause();
             
@@ -70,6 +74,7 @@ public final class SnakeApp extends JFrame {
             maxLengths.merge(snakeId, currentLength, Math::max);
             
             var res = board.step(snake);
+            
             if (res == Board.MoveResult.HIT_OBSTACLE) {
               collisionCount++;
               if (collisionCount >= 3) {
@@ -78,11 +83,23 @@ public final class SnakeApp extends JFrame {
                 break;
               }
               snake.turn(Direction.values()[(int)(Math.random() * 4)]);
+              
+            } else if (res == Board.MoveResult.ATE_TURBO) {
+              collisionCount = 0;
+              turboTicks = 100;
+              
+            } else if (res == Board.MoveResult.TELEPORTED) {
+              collisionCount = 0;
+              
             } else {
               collisionCount = 0;
             }
             
-            Thread.sleep(80);
+            // Usar velocidad turbo si está activo
+            int sleepTime = (turboTicks > 0) ? turboSleep : baseSleep;
+            if (turboTicks > 0) turboTicks--;
+            
+            Thread.sleep(sleepTime);
           }
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
@@ -383,6 +400,10 @@ public final class SnakeApp extends JFrame {
   }
 
   public static void launch() {
-    SwingUtilities.invokeLater(SnakeApp::new);
+    launch(Integer.getInteger("snakes", 2));
+  }
+  
+  public static void launch(int numSnakes) {
+    SwingUtilities.invokeLater(() -> new SnakeApp(numSnakes).setVisible(true));
   }
 }
